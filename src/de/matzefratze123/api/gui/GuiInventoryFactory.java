@@ -1,4 +1,4 @@
-package me.matzefratze123.api.gui;
+package de.matzefratze123.api.gui;
 
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.Inventory;

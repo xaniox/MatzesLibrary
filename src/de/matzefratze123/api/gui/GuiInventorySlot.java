@@ -1,4 +1,4 @@
-package me.matzefratze123.api.gui;
+package de.matzefratze123.api.gui;
 
 import java.util.Arrays;
 import java.util.List;
