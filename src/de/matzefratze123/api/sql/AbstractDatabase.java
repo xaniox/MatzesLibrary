@@ -26,6 +26,14 @@ public abstract class AbstractDatabase {
 	 */
 	public AbstractDatabase(Plugin plugin) {
 		this.plugin = plugin;
+		
+		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+			
+			@Override
+			public void run() {
+				close();
+			}
+		}));
 	}
 	
 	/**
