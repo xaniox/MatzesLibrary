@@ -10,6 +10,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import de.matzefratze123.api.command.CommandExecutorService.TransformerMap;
 import de.matzefratze123.api.command.transform.TransformException;
 import de.matzefratze123.api.command.transform.Transformer;
 
@@ -81,7 +82,7 @@ public class ExecuteableMethod {
 		return executeableMethods.toArray(new ExecuteableMethod[executeableMethods.size()]);
 	}
 	
-	public void execute(CommandSender sender, String[] args) {
+	public void execute(CommandSender sender, String[] args, TransformerMap transformers) {
 		if (minArgs > 0 && args.length < minArgs) {
 			sender.sendMessage(usage == null ? ChatColor.RED + "Too few arguments!" : usage);
 			return;
@@ -108,7 +109,7 @@ public class ExecuteableMethod {
 			return;
 		}
 		
-		Argument<?>[] arguments = parseArguments(args);
+		Argument<?>[] arguments = parseArguments(transformers, args);
 		Object[] values = new Object[arguments.length + 1];
 		
 		values[0] = sender;
@@ -134,7 +135,7 @@ public class ExecuteableMethod {
 		}
 	}
 	
-	private Argument<?>[] parseArguments(String[] args) {
+	private Argument<?>[] parseArguments(TransformerMap transformers, String[] args) {
 		Argument<?>[] argsArray = new Argument<?>[parameterArgTypes.length]; 
 		
 		for (int i = 0; i < args.length && i < parameterArgTypes.length; i++) {
@@ -142,7 +143,7 @@ public class ExecuteableMethod {
 			Transformer<?> transformer = null;
 			
 			if (i < parameterArgTypes.length) {
-				transformer = Argument.getTransformer(parameterArgTypes[i]);
+				transformer = transformers.get(parameterArgTypes[i]);
 				
 				if (transformer == null) {
 					//There is no transformer for this parameter typ
@@ -194,6 +195,10 @@ public class ExecuteableMethod {
 
 	public String getDescription() {
 		return description;
+	}
+	
+	Method getMethod() {
+		return method;
 	}
 
 }
