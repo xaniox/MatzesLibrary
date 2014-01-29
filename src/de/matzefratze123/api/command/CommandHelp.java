@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface CommandHelp {
 	
-	public static final String DEFAULT_USAGE_STYLE = "§e%usage% - %description%";
+	public static final String DEFAULT_USAGE_STYLE = "§eUsage: %usage% - %description%";
 	
 	/**
 	 * The usage of this command

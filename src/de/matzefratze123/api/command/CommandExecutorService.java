@@ -8,6 +8,7 @@ import java.util.Map.Entry;
 
 import org.apache.commons.lang.Validate;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -33,6 +34,8 @@ public class CommandExecutorService implements CommandExecutor {
 	
 	private RootCommandExecutor rootCommandExecutor;
 	private final Map<CommandListener, ExecuteableMethod[]> listeners;
+	
+	private String unknownCommandMessage = ChatColor.RED + "Command not found.";
 	
 	public CommandExecutorService(String rootCommand, JavaPlugin plugin) {
 		this.rootCommand = rootCommand;
@@ -110,9 +113,20 @@ public class CommandExecutorService implements CommandExecutor {
 					}
 				}
 			}
+			
+			//No command found
+			sender.sendMessage(unknownCommandMessage);
 		}
 		
 		return true;
+	}
+	
+	public void setUnknownCommandMessage(String unknownCommandMessage) {
+		this.unknownCommandMessage = unknownCommandMessage;
+	}
+	
+	public String getUnknownCommandMessage() {
+		return unknownCommandMessage;
 	}
 	
 	public void registerListener(CommandListener listener) {

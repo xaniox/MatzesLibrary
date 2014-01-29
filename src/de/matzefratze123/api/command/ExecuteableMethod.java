@@ -123,7 +123,7 @@ public class ExecuteableMethod {
 		Object[] values = new Object[parameterArgTypes.length + 1];
 		
 		values[0] = sender;
-		for (int i = 1; i < arguments.length; i++) {
+		for (int i = 1; i < arguments.length + 1; i++) {
 			values[i] = arguments[i - 1] == null ? null : arguments[i - 1].getValue();
 		}
 		
