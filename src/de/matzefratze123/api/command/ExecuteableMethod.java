@@ -1,5 +1,6 @@
 package de.matzefratze123.api.command;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -24,15 +25,7 @@ public class ExecuteableMethod {
 	private Method method;
 	private CommandListener instance;
 	
-	private String name;
-	private int minArgs;
-	private boolean onlyIngame;
-	
-	private String[] permissions;
-	
-	private String usage;
-	private String description;
-	private String usageStyle;
+	private CommandData data;
 	
 	public ExecuteableMethod(CommandListener listener, Method method) {
 		if (!method.isAnnotationPresent(Command.class))
@@ -48,26 +41,43 @@ public class ExecuteableMethod {
 		
 		this.instance = listener;
 		this.method = method;
-		this.name = cmdAnnotation.value();
-		this.minArgs = cmdAnnotation.minArgs();
-		this.onlyIngame = cmdAnnotation.onlyIngame();
+		
+		String name = cmdAnnotation.value();
+		int minArgs = cmdAnnotation.minArgs();
+		boolean onlyIngame = cmdAnnotation.onlyIngame();
+		
+		String[] permissions = null;
+		
+		String usage = null;
+		String description = null;
+		String usageStyle = null;
+		
+		String[] aliases = null;
 		
 		if (method.isAnnotationPresent(CommandPermissions.class)) {
 			CommandPermissions permAnnotation = method.getAnnotation(CommandPermissions.class);
 			
-			this.permissions = permAnnotation.value();
+			permissions = permAnnotation.value();
 		}
 		
 		if (method.isAnnotationPresent(CommandHelp.class)) {
 			CommandHelp helpAnnotation = method.getAnnotation(CommandHelp.class);
 			
-			this.usage = helpAnnotation.usage();
-			this.description = helpAnnotation.description();
-			this.usageStyle = helpAnnotation.usageStyle();
+			usage = helpAnnotation.usage();
+			description = helpAnnotation.description();
+			usageStyle = helpAnnotation.usageStyle();
 		}
+		
+		if (method.isAnnotationPresent(CommandAliases.class)) {
+			CommandAliases aliasesAnnotation = method.getAnnotation(CommandAliases.class);
+			
+			aliases = aliasesAnnotation.value();
+		}
+		
+		this.data = new CommandData(name, minArgs, onlyIngame, usage, description, usageStyle, permissions, aliases);
 	}
 	
-	public static ExecuteableMethod[] findListenerMethods(CommandListener listener) {
+	public static List<ExecuteableMethod> findListenerMethods(CommandListener listener) {
 		List<ExecuteableMethod> executeableMethods = new ArrayList<ExecuteableMethod>();
 		
 		for (Method method : listener.getClass().getMethods()) {
@@ -79,22 +89,22 @@ public class ExecuteableMethod {
 			executeableMethods.add(em);
 		}
 		
-		return executeableMethods.toArray(new ExecuteableMethod[executeableMethods.size()]);
+		return executeableMethods;
 	}
 	
 	public void execute(CommandSender sender, String[] args, TransformerMap transformers) {
-		if (minArgs > 0 && args.length < minArgs) {
-			sender.sendMessage(usage == null ? ChatColor.RED + "Too few arguments!" : usage);
+		if (data.getMinArgs() > 0 && args.length < data.getMinArgs()) {
+			sender.sendMessage(data.getUsage() == null ? ChatColor.RED + "Too few arguments!" : ChatColor.RED + data.getUsage());
 			return;
 		}
 		
-		if (onlyIngame && !(sender instanceof Player)) {
+		if (data.onlyIngame() && !(sender instanceof Player)) {
 			sender.sendMessage("This command can only be used by a player");
 			return;
 		}
 		
-		if (permissions != null) {
-			for (String permission : permissions) {
+		if (data.getPermissions() != null) {
+			for (String permission : data.getPermissions()) {
 				if (!sender.hasPermission(permission)) {
 					sender.sendMessage(ChatColor.RED + "You don't have permission.");
 					return;
@@ -102,18 +112,18 @@ public class ExecuteableMethod {
 			}
 		}
 		
-		if (args.length > 0 && (args[0].equalsIgnoreCase("?") || args[0].equalsIgnoreCase("help") && usage != null && description != null)) {
-			String helpLine = usageStyle.replace(USAGE_VARIABLE, usage).replace(DESCRIPTION_VARIABLE, description);
+		if (args.length > 0 && (args[0].equalsIgnoreCase("?") || args[0].equalsIgnoreCase("help") && data.getUsage() != null && data.getDescription() != null)) {
+			String helpLine = data.getUsageStyle().replace(USAGE_VARIABLE, data.getUsage()).replace(DESCRIPTION_VARIABLE, data.getDescription());
 			
 			sender.sendMessage(helpLine);
 			return;
 		}
 		
 		Argument<?>[] arguments = parseArguments(transformers, args);
-		Object[] values = new Object[arguments.length + 1];
+		Object[] values = new Object[parameterArgTypes.length + 1];
 		
 		values[0] = sender;
-		for (int i = 1; i < values.length; i++) {
+		for (int i = 1; i < arguments.length; i++) {
 			values[i] = arguments[i - 1] == null ? null : arguments[i - 1].getValue();
 		}
 		
@@ -130,40 +140,64 @@ public class ExecuteableMethod {
 				detailMessage = e.getMessage();
 			}
 			
-			Bukkit.getLogger().severe("Cannot execute command " + name + " in method " + method.getName() + " of type " + method.getDeclaringClass().getName() + ": " + e + ": " + detailMessage);
+			Bukkit.getLogger().severe("Cannot execute command " + data.getName() + " in method " + method.getName() + " of type " + method.getDeclaringClass().getName() + ": " + e + ": " + detailMessage);
 			e.printStackTrace();
 		}
 	}
 	
 	private Argument<?>[] parseArguments(TransformerMap transformers, String[] args) {
-		Argument<?>[] argsArray = new Argument<?>[parameterArgTypes.length]; 
+		List<Argument<?>> argsList = new ArrayList<Argument<?>>();
+		//Argument<?>[] argsArray = new Argument<?>[parameterArgTypes.length];
 		
 		for (int i = 0; i < args.length && i < parameterArgTypes.length; i++) {
 			String arg = args[i];
 			Transformer<?> transformer = null;
 			
 			if (i < parameterArgTypes.length) {
-				transformer = transformers.get(parameterArgTypes[i]);
-				
-				if (transformer == null) {
-					//There is no transformer for this parameter typ
-					argsArray[i] = null;
-					continue;
-				}
-				
-				try {
-					Argument<?> argument = createArgument(transformer, arg);
+				//Arrays have to be the last parameter (as dynamic parameters do too)
+				if (parameterArgTypes[i].isArray() && i == parameterArgTypes.length - 1) {
+					Class<?> componentType = parameterArgTypes[i].getComponentType();
+					transformer = transformers.get(componentType);
 					
-					argsArray[i] = argument;
-				} catch (TransformException e) {
-					//Transform failed, argument null
-					argsArray[i] = null;
-					continue;
+					if (transformer == null) {
+						argsList.add(null);
+						break;
+					}
+					
+					Object[] array = (Object[])Array.newInstance(componentType, args.length - i);
+					
+					for (int j = i; j < args.length; j++) {
+						try {
+							Object argument = transformer.transform(args[j]);
+							array[j - i] = argument;
+						} catch (TransformException e) {
+							array[j - i] = null;
+						}
+					}
+					
+					argsList.add(new Argument<Object>(array));
+				} else {
+					transformer = transformers.get(parameterArgTypes[i]);
+					
+					if (transformer == null) {
+						//There is no transformer for this parameter typ
+						argsList.add(null);
+						continue;
+					}
+					
+					try {
+						Argument<?> argument = createArgument(transformer, arg);
+						
+						argsList.add(argument);
+					} catch (TransformException e) {
+						//Transform failed, argument null
+						argsList.add(null);
+					}
 				}
 			}
 		}
 		
-		return argsArray;
+		return argsList.toArray(new Argument<?>[argsList.size()]);
 	}
 	
 	private <V> Argument<V> createArgument(Transformer<V> t, String arg) throws TransformException {
@@ -173,28 +207,8 @@ public class ExecuteableMethod {
 		return argument;
 	}
 
-	public String getName() {
-		return name;
-	}
-
-	public int getMinArgs() {
-		return minArgs;
-	}
-
-	public boolean getOnlyIngame() {
-		return onlyIngame;
-	}
-
-	public String[] getPermissions() {
-		return permissions;
-	}
-
-	public String getUsage() {
-		return usage;
-	}
-
-	public String getDescription() {
-		return description;
+	public CommandData getCommandData() {
+		return data;
 	}
 	
 	Method getMethod() {
